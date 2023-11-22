@@ -42,7 +42,8 @@ FROM debian:bullseye-slim as pytorch-install
 ARG PYTORCH_VERSION=2.0.1
 ARG PYTHON_VERSION=3.9
 # Keep in sync with `server/pyproject.toml
-ARG CUDA_VERSION=11.8
+ARG PYTORCH_CUDA_VERSION=11.8
+# ARG CUDA_CONTAINER=nvidia/cuda:11.0.3-base-ubuntu20.04
 ARG MAMBA_VERSION=23.1.0-1
 ARG CUDA_CHANNEL=nvidia
 ARG INSTALL_CHANNEL=pytorch
@@ -75,7 +76,7 @@ RUN chmod +x ~/mambaforge.sh && \
 RUN case ${TARGETPLATFORM} in \
          "linux/arm64")  exit 1 ;; \
          *)              /opt/conda/bin/conda update -y conda &&  \
-                         /opt/conda/bin/conda install -c "${INSTALL_CHANNEL}" -c "${CUDA_CHANNEL}" -y "python=${PYTHON_VERSION}" pytorch==$PYTORCH_VERSION "pytorch-cuda=$(echo $CUDA_VERSION | cut -d'.' -f 1-2)"  ;; \
+                         /opt/conda/bin/conda install -c "${INSTALL_CHANNEL}" -c "${CUDA_CHANNEL}" -y "python=${PYTHON_VERSION}" pytorch==$PYTORCH_VERSION "pytorch-cuda=$(echo $PYTORCH_CUDA_VERSION | cut -d'.' -f 1-2)"  ;; \
     esac && \
     /opt/conda/bin/conda clean -ya
 
@@ -148,7 +149,8 @@ COPY server/Makefile-vllm Makefile
 RUN make build-vllm
 
 # Text Generation Inference base image
-FROM nvidia/cuda:11.8.0-base-ubuntu20.04 as base
+FROM nvidia/cuda:11.0.3-base-ubuntu20.04 as base
+# nvidia/cuda:11.8.0-base-ubuntu20.04 as base
 
 # Conda env
 ENV PATH=/opt/conda/bin:$PATH \
@@ -214,6 +216,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         build-essential \
         g++ \
         && rm -rf /var/lib/apt/lists/*
+
+# Update transformer version for mistral
+RUN pip install -U transformers tokenizers
 
 # AWS Sagemaker compatbile image
 FROM base as sagemaker

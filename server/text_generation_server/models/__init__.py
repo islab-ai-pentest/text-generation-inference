@@ -44,38 +44,40 @@ __all__ = [
 
 FLASH_ATT_ERROR_MESSAGE = "{} requires Flash Attention enabled models."
 
-FLASH_ATTENTION = True
-try:
-    from text_generation_server.models.flash_rw import FlashRWSharded
-    from text_generation_server.models.flash_neox import FlashNeoXSharded
-    from text_generation_server.models.flash_llama import (
-        FlashLlama,
-    )
-    from text_generation_server.models.flash_santacoder import (
-        FlashSantacoderSharded,
-    )
-    from text_generation_server.models.idefics import IDEFICSSharded
+FLASH_ATTENTION = bool(os.getenv("USE_FLASH_ATTENTION", True))
 
-except ImportError as e:
-    logger.warning(f"Could not import Flash Attention enabled models: {e}")
-    FLASH_ATTENTION = False
-
+# FLASH_ATTENTION = True
 if FLASH_ATTENTION:
-    __all__.append(FlashNeoXSharded)
-    __all__.append(FlashRWSharded)
-    __all__.append(FlashSantacoderSharded)
-    __all__.append(FlashLlama)
-    __all__.append(IDEFICSSharded)
+    try:
+        from text_generation_server.models.flash_rw import FlashRWSharded
+        from text_generation_server.models.flash_neox import FlashNeoXSharded
+        from text_generation_server.models.flash_llama import (
+            FlashLlama,
+        )
+        from text_generation_server.models.flash_santacoder import (
+            FlashSantacoderSharded,
+        )
+        from text_generation_server.models.idefics import IDEFICSSharded
 
+        __all__.append(FlashNeoXSharded)
+        __all__.append(FlashRWSharded)
+        __all__.append(FlashSantacoderSharded)
+        __all__.append(FlashLlama)
+        __all__.append(IDEFICSSharded)
+
+    except ImportError as e:
+        logger.warning(f"Could not import Flash Attention enabled models: {e}")
+        FLASH_ATTENTION = False
+        
 MISTRAL = True
 try:
-    from text_generation_server.models.flash_mistral import FlashMistral
+   from text_generation_server.models.flash_mistral import FlashMistral
 except ImportError as e:
-    logger.warning(f"Could not import Mistral model: {e}")
-    MISTRAL = False
+   logger.warning(f"Could not import Mistral model: {e}")
+   MISTRAL = False
 
 if MISTRAL:
-    __all__.append(FlashMistral)
+   __all__.append(FlashMistral)
 
 
 def get_model(
@@ -248,7 +250,7 @@ def get_model(
                 )
 
     if model_type == "mistral":
-        if MISTRAL:
+        if MISTRAL and FLASH_ATTENTION:
             return FlashMistral(
                 model_id,
                 revision,
@@ -256,7 +258,14 @@ def get_model(
                 dtype=dtype,
                 trust_remote_code=trust_remote_code,
             )
-        raise NotImplementedError("Mistral model requires flash attention v2")
+        return CausalLM(
+                model_id,
+                revision,
+                quantize=quantize,
+                dtype=dtype,
+                trust_remote_code=trust_remote_code,
+            )
+        # raise NotImplementedError("Mistral model requires flash attention v2")
 
     if model_type == "opt":
         return OPTSharded(
@@ -299,6 +308,8 @@ def get_model(
         raise ValueError("4bit quantization is not supported for AutoModel")
     elif (quantize == "eetq"):
         raise ValueError("Eetq quantization is not supported for AutoModel")
+    
+    
     if model_type in modeling_auto.MODEL_FOR_CAUSAL_LM_MAPPING_NAMES:
         return CausalLM(
             model_id,
